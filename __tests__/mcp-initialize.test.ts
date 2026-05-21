@@ -100,10 +100,23 @@ describe('MCP initialize handshake (issue #172)', () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph-mcp-init-'));
   });
 
-  afterEach(() => {
-    if (child && !child.killed) {
-      child.kill();
+  afterEach(async () => {
+    if (child) {
+      const proc = child;
       child = null;
+      // Kill first, then wait for the OS to confirm exit before destroying
+      // the stdio streams. On Windows, destroying streams before the process
+      // exits races with IOCP completion and can trigger an SEH crash in
+      // libuv during the vitest fork-worker shutdown.
+      if (!proc.killed) proc.kill();
+      await new Promise<void>((resolve) => {
+        if (proc.exitCode !== null) { resolve(); return; }
+        const timer = setTimeout(resolve, 2000);
+        proc.once('exit', () => { clearTimeout(timer); resolve(); });
+      });
+      proc.stdin?.destroy();
+      proc.stdout?.destroy();
+      proc.stderr?.destroy();
     }
     // On Windows, the killed subprocess may briefly retain file handles.
     // Swallow EPERM here — temp dirs will be cleaned by the OS eventually.
