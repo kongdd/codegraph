@@ -126,6 +126,7 @@ class WasmDatabaseAdapter implements SqliteDatabase {
   // Track raw WASM statements so we can finalize them on close.
   // node-sqlite3-wasm won't release its file lock if statements are left open.
   private _openStmts = new Set<any>();
+  private _closed = false;
 
   constructor(dbPath: string) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -162,6 +163,15 @@ class WasmDatabaseAdapter implements SqliteDatabase {
   }
 
   exec(sql: string): void {
+    // VACUUM requires no open prepared statements in WASM SQLite.
+    // Finalize all tracked statements before running VACUUM to avoid
+    // "cannot VACUUM - SQL statements in progress" errors.
+    if (sql.trim().toUpperCase().startsWith('VACUUM')) {
+      for (const stmt of this._openStmts) {
+        try { stmt.finalize(); } catch { /* already finalized */ }
+      }
+      this._openStmts.clear();
+    }
     this._db.exec(sql);
   }
 
@@ -217,6 +227,8 @@ class WasmDatabaseAdapter implements SqliteDatabase {
   }
 
   close(): void {
+    if (this._closed) return;
+    this._closed = true;
     // Finalize all tracked statements before closing.
     // node-sqlite3-wasm won't release its directory-based file lock
     // if any prepared statements remain open.

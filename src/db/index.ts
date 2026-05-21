@@ -167,6 +167,7 @@ export class DatabaseConnection {
    * Close the database connection
    */
   close(): void {
+    if (!this.db.open) return; // Already closed — guard against double-close
     this.db.close();
   }
 

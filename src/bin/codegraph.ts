@@ -54,9 +54,12 @@ const importESM = new Function('specifier', 'return import(specifier)') as
 // later, leading to a steady stream of "what is this OOM" reports.
 // Hard-exit before any WASM work; allow override via env var for users
 // who patched V8 themselves or want to test a future fix.
+// Only Node 25.x is affected by the V8 turboshaft WASM JIT Zone allocator
+// bug (https://github.com/colbymchenry/codegraph/issues/81).
+// Node 26+ has a new V8 that resolved the regression.
 const nodeVersion = process.versions.node;
 const nodeMajor = parseInt(nodeVersion.split('.')[0] ?? '0', 10);
-if (nodeMajor >= 25) {
+if (nodeMajor === 25) {
   process.stderr.write(buildNode25BlockBanner(nodeVersion) + '\n');
   if (!process.env.CODEGRAPH_ALLOW_UNSAFE_NODE) {
     process.exit(1);

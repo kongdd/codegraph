@@ -30,13 +30,25 @@ function mkTmpDir(label: string): string {
 // `os.homedir()` reads first. Same trick the rest of the suite uses
 // when it needs a mock home.
 function setHome(dir: string): { restore: () => void } {
-  const prev = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  const prev = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    APPDATA: process.env.APPDATA,
+    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+  };
   process.env.HOME = dir;
   process.env.USERPROFILE = dir;
+  // Windows opencode target reads APPDATA directly — redirect so global
+  // installs land in the temp dir rather than the real user profile.
+  process.env.APPDATA = path.join(dir, 'AppData', 'Roaming');
+  // Linux/macOS opencode uses XDG_CONFIG_HOME — redirect similarly.
+  process.env.XDG_CONFIG_HOME = path.join(dir, '.config');
   return {
     restore() {
       if (prev.HOME === undefined) delete process.env.HOME; else process.env.HOME = prev.HOME;
       if (prev.USERPROFILE === undefined) delete process.env.USERPROFILE; else process.env.USERPROFILE = prev.USERPROFILE;
+      if (prev.APPDATA === undefined) delete process.env.APPDATA; else process.env.APPDATA = prev.APPDATA;
+      if (prev.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = prev.XDG_CONFIG_HOME;
     },
   };
 }
@@ -298,9 +310,9 @@ describe('Installer targets — partial-state idempotency', () => {
     const opencode = getTarget('opencode')!;
     const result = opencode.install('local', { autoAllow: true });
     const paths = result.files.map((f) => f.path);
-    // macOS realpath shenanigans (/var vs /private/var) — suffix match.
-    expect(paths.some((p) => p.endsWith('/opencode.jsonc'))).toBe(true);
-    expect(paths.some((p) => p.endsWith('/AGENTS.md'))).toBe(true);
+    // Use path.basename() for cross-platform compatibility (Windows uses \ not /).
+    expect(paths.some((p) => path.basename(p) === 'opencode.jsonc')).toBe(true);
+    expect(paths.some((p) => path.basename(p) === 'AGENTS.md')).toBe(true);
   });
 
   it('opencode: uninstall removes only mcp.codegraph, preserves comments and siblings', () => {
@@ -357,7 +369,8 @@ describe('Installer targets — partial-state idempotency', () => {
     const claude = getTarget('claude')!;
     const result = claude.install('local', { autoAllow: false });
     // The MCP entry lands in ./.mcp.json — the file Claude Code reads.
-    expect(result.files.some((f) => f.path.endsWith('/.mcp.json'))).toBe(true);
+    // Use path.basename() for cross-platform compatibility (Windows uses \ not /).
+    expect(result.files.some((f) => path.basename(f.path) === '.mcp.json')).toBe(true);
     expect(fs.existsSync(path.join(tmpCwd, '.mcp.json'))).toBe(true);
     expect(fs.existsSync(path.join(tmpCwd, '.claude.json'))).toBe(false);
     const cfg = JSON.parse(fs.readFileSync(path.join(tmpCwd, '.mcp.json'), 'utf-8'));

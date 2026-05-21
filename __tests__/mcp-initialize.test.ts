@@ -23,6 +23,7 @@ function spawnServer(cwd: string): ChildProcessWithoutNullStreams {
   return spawn(process.execPath, [BIN, 'serve', '--mcp'], {
     cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, CODEGRAPH_ALLOW_UNSAFE_NODE: '1' },
   }) as ChildProcessWithoutNullStreams;
 }
 
@@ -101,10 +102,14 @@ describe('MCP initialize handshake (issue #172)', () => {
 
   afterEach(() => {
     if (child && !child.killed) {
-      child.kill('SIGKILL');
+      child.kill();
       child = null;
     }
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // On Windows, the killed subprocess may briefly retain file handles.
+    // Swallow EPERM here — temp dirs will be cleaned by the OS eventually.
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* ignore cleanup errors */ }
   });
 
   it('responds to initialize quickly when no .codegraph exists in cwd', async () => {

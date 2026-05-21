@@ -50,15 +50,17 @@ import {
 } from '../instructions-template';
 
 function globalConfigDir(): string {
+  // XDG_CONFIG_HOME takes precedence on all platforms — this lets tests
+  // redirect via env var without touching APPDATA, and respects users who
+  // have explicitly set XDG_CONFIG_HOME on Windows.
+  if (process.env.XDG_CONFIG_HOME && process.env.XDG_CONFIG_HOME.trim().length > 0) {
+    return path.join(process.env.XDG_CONFIG_HOME, 'opencode');
+  }
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
     return path.join(appData, 'opencode');
   }
-  // XDG_CONFIG_HOME if set, else ~/.config — matches opencode's docs.
-  const xdg = process.env.XDG_CONFIG_HOME && process.env.XDG_CONFIG_HOME.trim().length > 0
-    ? process.env.XDG_CONFIG_HOME
-    : path.join(os.homedir(), '.config');
-  return path.join(xdg, 'opencode');
+  return path.join(os.homedir(), '.config', 'opencode');
 }
 
 function configBaseDir(loc: Location): string {

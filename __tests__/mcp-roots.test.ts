@@ -29,6 +29,7 @@ function spawnServer(cwd: string): ChildProcessWithoutNullStreams {
   return spawn(process.execPath, [BIN, 'serve', '--mcp', '--no-watch'], {
     cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, CODEGRAPH_ALLOW_UNSAFE_NODE: '1' },
   }) as ChildProcessWithoutNullStreams;
 }
 
@@ -86,11 +87,17 @@ describe('MCP project resolution via roots/list (issue #196)', () => {
 
   afterEach(() => {
     if (child && !child.killed) {
-      child.kill('SIGKILL');
+      child.kill();
       child = null;
     }
-    fs.rmSync(cwdDir, { recursive: true, force: true });
-    fs.rmSync(projectDir, { recursive: true, force: true });
+    // On Windows, the killed subprocess may briefly retain file handles.
+    // Swallow EPERM here — temp dirs will be cleaned by the OS eventually.
+    try {
+      fs.rmSync(cwdDir, { recursive: true, force: true });
+    } catch { /* ignore cleanup errors */ }
+    try {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    } catch { /* ignore cleanup errors */ }
   });
 
   it('resolves the project from the client roots/list when no rootUri is sent', async () => {
