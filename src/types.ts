@@ -546,6 +546,8 @@ export const DEFAULT_CONFIG: CodeGraphConfig = {
     // Scala
     '**/*.scala',
     '**/*.sc',
+    // Julia
+    '**/*.jl',
   ],
   exclude: [
     // Version control
