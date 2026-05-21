@@ -3722,3 +3722,161 @@ class Svc {
     expect(decoratedNode?.name).toBe('method');
   });
 });
+
+describe('Julia Extraction', () => {
+  describe('Language detection', () => {
+    it('should detect Julia files', () => {
+      expect(detectLanguage('main.jl')).toBe('julia');
+      expect(detectLanguage('src/utils.jl')).toBe('julia');
+    });
+
+    it('should report Julia as supported', () => {
+      expect(isLanguageSupported('julia')).toBe(true);
+      expect(getSupportedLanguages()).toContain('julia');
+    });
+  });
+
+  describe('Function extraction', () => {
+    it('should extract top-level function definitions', () => {
+      const code = `
+function greet(name::String)
+  println("Hello, \$name!")
+end
+
+function add(a::Int, b::Int)::Int
+  return a + b
+end
+`;
+      const result = extractFromSource('utils.jl', code);
+      const fns = result.nodes.filter((n) => n.kind === 'function');
+      expect(fns.find((f) => f.name === 'greet')).toBeDefined();
+      expect(fns.find((f) => f.name === 'add')).toBeDefined();
+    });
+
+    it('should extract function signature', () => {
+      const code = `
+function process(x::Int, y::Float64)::String
+  return string(x + y)
+end
+`;
+      const result = extractFromSource('process.jl', code);
+      const fn = result.nodes.find((n) => n.kind === 'function' && n.name === 'process');
+      expect(fn).toBeDefined();
+      expect(fn?.signature).toContain('x::Int');
+    });
+
+    it('should extract zero-argument functions', () => {
+      const code = `
+function hello()
+  println("Hello!")
+end
+`;
+      const result = extractFromSource('hello.jl', code);
+      const fn = result.nodes.find((n) => n.kind === 'function' && n.name === 'hello');
+      expect(fn).toBeDefined();
+    });
+
+    it('should extract macro definitions', () => {
+      const code = `
+macro mytime(expr)
+  return :(@elapsed \$expr)
+end
+`;
+      const result = extractFromSource('macros.jl', code);
+      const macro = result.nodes.find((n) => n.kind === 'function' && n.name === 'mytime');
+      expect(macro).toBeDefined();
+    });
+  });
+
+  describe('Struct extraction', () => {
+    it('should extract struct definitions', () => {
+      const code = `
+struct Point
+  x::Float64
+  y::Float64
+end
+
+mutable struct Counter
+  value::Int
+end
+`;
+      const result = extractFromSource('types.jl', code);
+      const structs = result.nodes.filter((n) => n.kind === 'struct');
+      expect(structs.find((s) => s.name === 'Point')).toBeDefined();
+      expect(structs.find((s) => s.name === 'Counter')).toBeDefined();
+    });
+
+    it('should extract parametric struct definitions', () => {
+      const code = `
+struct Vector2D{T<:Number}
+  x::T
+  y::T
+end
+`;
+      const result = extractFromSource('vector.jl', code);
+      const struct_ = result.nodes.find((n) => n.kind === 'struct');
+      expect(struct_).toBeDefined();
+      // Name may include type parameters (tree-sitter includes full type_head text)
+      expect(struct_?.name).toContain('Vector2D');
+    });
+  });
+
+  describe('Abstract type extraction', () => {
+    it('should extract abstract type definitions', () => {
+      const code = `
+abstract type Animal end
+abstract type Shape end
+`;
+      const result = extractFromSource('abstract.jl', code);
+      const abstracts = result.nodes.filter((n) => n.kind === 'interface');
+      expect(abstracts.find((a) => a.name === 'Animal')).toBeDefined();
+      expect(abstracts.find((a) => a.name === 'Shape')).toBeDefined();
+    });
+  });
+
+  describe('Module extraction', () => {
+    it('should extract module definitions', () => {
+      const code = `
+module MyModule
+  export greet
+
+  function greet(name::String)
+    println("Hello, \$name!")
+  end
+end
+`;
+      const result = extractFromSource('mymodule.jl', code);
+      const fns = result.nodes.filter((n) => n.kind === 'function');
+      expect(fns.find((f) => f.name === 'greet')).toBeDefined();
+    });
+  });
+
+  describe('Import extraction', () => {
+    it('should extract import statements', () => {
+      const code = `
+import LinearAlgebra
+import Base.Math: sin, cos
+using Statistics
+using DataFrames: DataFrame, groupby
+`;
+      const result = extractFromSource('imports.jl', code);
+      const imports = result.nodes.filter((n) => n.kind === 'import');
+      expect(imports.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Call extraction', () => {
+    it('should extract function calls', () => {
+      const code = `
+function main()
+  x = sqrt(2.0)
+  println(x)
+  y = sin(x) + cos(x)
+end
+`;
+      const result = extractFromSource('main.jl', code);
+      const calls = result.unresolvedReferences.filter((r) => r.referenceKind === 'calls');
+      expect(calls.length).toBeGreaterThan(0);
+    });
+  });
+});
